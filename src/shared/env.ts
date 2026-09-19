@@ -1,6 +1,4 @@
 export function isPreviewEnv(): boolean {
-  return (
-    process.env.NEXT_PUBLIC_VERCEL_ENV === "preview" ||
-    process.env.NEXT_PUBLIC_APP_ENV === "preview"
-  );
+  // Temporarily available in every env so the developer menu can be used
+  return true;
 }
