@@ -1,10 +1,14 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { PlayGame } from "../components/PlayGame";
+import { useLayoutEffect, useState } from "react";
+import { PlayGame, rememberPongPointer } from "../components/PlayGame";
 import styles from "./PlayPage.module.css";
 
 const PONG_QUERY = "(width < 684px)";
+
+function isPongView() {
+  return window.matchMedia(PONG_QUERY).matches || window.innerWidth < 684;
+}
 
 function isInteractiveTouchTarget(target: EventTarget | null) {
   if (!(target instanceof Element)) return false;
@@ -13,8 +17,13 @@ function isInteractiveTouchTarget(target: EventTarget | null) {
   );
 }
 
+function isPongUiTarget(target: EventTarget | null) {
+  if (!(target instanceof Element)) return false;
+  return Boolean(target.closest("footer, [data-play-resume-cta]")) ||
+    isInteractiveTouchTarget(target);
+}
+
 export function PlayPage() {
-  const pageRef = useRef<HTMLElement>(null);
   const [pong, setPong] = useState(false);
 
   useLayoutEffect(() => {
@@ -35,74 +44,75 @@ export function PlayPage() {
     document.documentElement.dataset.playMobile = "true";
     document.documentElement.style.overflow = "hidden";
     document.documentElement.style.overscrollBehavior = "none";
+    document.documentElement.style.touchAction = "none";
     document.body.style.overflow = "hidden";
     document.body.style.overscrollBehavior = "none";
+    document.body.style.touchAction = "none";
 
     return () => {
       delete document.documentElement.dataset.playMobile;
       document.documentElement.style.removeProperty("overflow");
       document.documentElement.style.removeProperty("overscroll-behavior");
+      document.documentElement.style.removeProperty("touch-action");
       document.body.style.removeProperty("overflow");
       document.body.style.removeProperty("overscroll-behavior");
+      document.body.style.removeProperty("touch-action");
     };
   }, [pong]);
 
-  useEffect(() => {
-    if (!pong) return;
+  useLayoutEffect(() => {
+    let capturingId: number | null = null;
 
     const onTouchStart = (event: TouchEvent) => {
-      if (isInteractiveTouchTarget(event.target)) return;
+      if (!isPongView()) return;
+      if (isPongUiTarget(event.target)) return;
       event.preventDefault();
     };
 
-    document.addEventListener("touchstart", onTouchStart, { capture: true, passive: false });
-    return () => {
-      document.removeEventListener("touchstart", onTouchStart, { capture: true });
-    };
-  }, [pong]);
-
-  useEffect(() => {
-    if (!pong) return;
-
     const forward = (phase: "down" | "move" | "up", event: PointerEvent) => {
-      if (
-        event.target instanceof Element &&
-        event.target.closest("footer, [data-play-resume-cta]")
-      )
+      if (!isPongView()) return;
+      if (phase === "down") {
+        if (isPongUiTarget(event.target)) return;
+        capturingId = event.pointerId;
+      } else if (phase === "move") {
+        if (capturingId !== event.pointerId) {
+          if (isPongUiTarget(event.target)) return;
+          capturingId = event.pointerId;
+        }
+      } else if (capturingId !== event.pointerId) {
         return;
-      const canvas = pageRef.current?.querySelector("canvas");
-      if (!canvas || event.clientY < canvas.getBoundingClientRect().bottom) return;
-      window.dispatchEvent(
-        new CustomEvent("pong-external-pointer", {
-          detail: {
-            phase,
-            clientX: event.clientX,
-            pointerId: event.pointerId,
-            pointerType: event.pointerType,
-          },
-        }),
-      );
+      } else {
+        capturingId = null;
+      }
+      if (event.cancelable && event.pointerType === "touch") event.preventDefault();
+      rememberPongPointer({
+        phase,
+        clientX: event.clientX,
+        pointerId: event.pointerId,
+        pointerType: event.pointerType,
+      });
     };
 
     const onDown = (event: PointerEvent) => forward("down", event);
     const onMove = (event: PointerEvent) => forward("move", event);
     const onUp = (event: PointerEvent) => forward("up", event);
 
-    document.addEventListener("pointerdown", onDown);
-    document.addEventListener("pointermove", onMove);
-    document.addEventListener("pointerup", onUp);
-    document.addEventListener("pointercancel", onUp);
+    document.addEventListener("touchstart", onTouchStart, { capture: true, passive: false });
+    document.addEventListener("pointerdown", onDown, { capture: true, passive: false });
+    document.addEventListener("pointermove", onMove, { capture: true, passive: false });
+    document.addEventListener("pointerup", onUp, { capture: true });
+    document.addEventListener("pointercancel", onUp, { capture: true });
     return () => {
-      document.removeEventListener("pointerdown", onDown);
-      document.removeEventListener("pointermove", onMove);
-      document.removeEventListener("pointerup", onUp);
-      document.removeEventListener("pointercancel", onUp);
+      document.removeEventListener("touchstart", onTouchStart, { capture: true });
+      document.removeEventListener("pointerdown", onDown, { capture: true });
+      document.removeEventListener("pointermove", onMove, { capture: true });
+      document.removeEventListener("pointerup", onUp, { capture: true });
+      document.removeEventListener("pointercancel", onUp, { capture: true });
     };
-  }, [pong]);
+  }, []);
 
   return (
     <section
-      ref={pageRef}
       className={styles.page}
       data-page="play"
       data-play-pong={pong ? "true" : undefined}

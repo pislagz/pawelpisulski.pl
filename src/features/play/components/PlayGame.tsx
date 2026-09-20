@@ -158,6 +158,36 @@ type Props = {
   restartToken: number;
 };
 
+type PongPointerDetail = {
+  phase: "down" | "move" | "up";
+  clientX: number;
+  pointerId: number;
+  pointerType: string;
+};
+
+let livePongPointer: Omit<PongPointerDetail, "phase"> | null = null;
+
+function isPongUiTarget(target: EventTarget | null) {
+  if (!(target instanceof Element)) return false;
+  return Boolean(
+    target.closest(
+      "footer, [data-play-resume-cta], a, button, input, textarea, select, [role='button'], [contenteditable='true']",
+    ),
+  );
+}
+
+export function rememberPongPointer(detail: PongPointerDetail) {
+  if (detail.phase === "up") {
+    if (livePongPointer?.pointerId === detail.pointerId) livePongPointer = null;
+  } else {
+    livePongPointer = {
+      clientX: detail.clientX,
+      pointerId: detail.pointerId,
+      pointerType: detail.pointerType,
+    };
+  }
+}
+
 function SpaceInvaders({ onScore, onGameOver, onChargeChange, restartToken }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -533,8 +563,10 @@ function VerticalPong({
   restartToken,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const introReadyRef = useRef(introReady);
+  introReadyRef.current = introReady;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const context = canvas.getContext("2d");
@@ -555,6 +587,8 @@ function VerticalPong({
     const keys = new Set<string>();
     let score = 0;
     let stopped = false;
+    let matchStarted = false;
+    let countdownStarted = false;
     let frame = 0;
     let lastTime = performance.now();
     let opponentTarget = width / 2;
@@ -580,22 +614,24 @@ function VerticalPong({
 
     const isGhostMouse = (pointerType?: string) =>
       pointerType !== "touch" && performance.now() - lastTouchAt < 800;
-    const movePlayer = (event: PointerEvent) => {
-      if (event.pointerType === "touch" && event.pointerId !== activeTouchPointer) return;
-      const rect = canvas.getBoundingClientRect();
-      if (event.pointerType === "touch") {
-        const deltaX = event.clientX - lastTouchClientX;
-        player.x += (deltaX / rect.width) * width;
-        lastTouchClientX = event.clientX;
+    const beginTouch = (pointerId: number, clientX: number) => {
+      activeTouchPointer = pointerId;
+      lastTouchClientX = clientX;
+      lastTouchAt = performance.now();
+    };
+    const moveTouch = (pointerId: number, clientX: number) => {
+      if (activeTouchPointer === null) {
+        beginTouch(pointerId, clientX);
         return;
       }
-      if (isGhostMouse(event.pointerType)) return;
-      player.x = ((event.clientX - rect.left) / rect.width) * width;
-    };
-    const movePlayerWithMouse = (event: MouseEvent) => {
-      if (isGhostMouse("mouse")) return;
+      if (pointerId !== activeTouchPointer) return;
       const rect = canvas.getBoundingClientRect();
-      player.x = ((event.clientX - rect.left) / rect.width) * width;
+      player.x += ((clientX - lastTouchClientX) / rect.width) * width;
+      lastTouchClientX = clientX;
+    };
+    const movePlayerAbsolute = (clientX: number) => {
+      const rect = canvas.getBoundingClientRect();
+      player.x = ((clientX - rect.left) / rect.width) * width;
     };
     const onKeyDown = (event: KeyboardEvent) => {
       unlockArcadeAudio();
@@ -620,63 +656,41 @@ function VerticalPong({
       lastTap = now;
     };
     const onPointerDown = (event: PointerEvent) => {
+      if (isPongUiTarget(event.target)) return;
       unlockArcadeAudio();
-      if (event.pointerType === "touch") {
-        activeTouchPointer = event.pointerId;
-        lastTouchClientX = event.clientX;
-        lastTouchAt = performance.now();
-        canvas.setPointerCapture(event.pointerId);
-      } else if (!isGhostMouse(event.pointerType)) {
-        movePlayer(event);
-      }
+      if (event.pointerType === "touch") beginTouch(event.pointerId, event.clientX);
+      else if (!isGhostMouse(event.pointerType)) movePlayerAbsolute(event.clientX);
       registerPowerTap(performance.now());
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      if (event.pointerType === "touch") {
+        if (activeTouchPointer !== event.pointerId && isPongUiTarget(event.target)) return;
+        moveTouch(event.pointerId, event.clientX);
+        return;
+      }
+      if (isPongUiTarget(event.target)) return;
+      if (isGhostMouse(event.pointerType)) return;
+      const rect = canvas.getBoundingClientRect();
+      if (event.clientY < rect.top) return;
+      movePlayerAbsolute(event.clientX);
     };
     const onPointerUp = (event: PointerEvent) => {
       if (event.pointerId === activeTouchPointer) activeTouchPointer = null;
     };
-    const onExternalPointer = (event: Event) => {
-      const { phase, clientX, pointerId, pointerType } = (
-        event as CustomEvent<{
-          phase: "down" | "move" | "up";
-          clientX: number;
-          pointerId: number;
-          pointerType: string;
-        }>
-      ).detail;
-      if (phase === "down") {
-        unlockArcadeAudio();
-        if (pointerType === "touch") {
-          activeTouchPointer = pointerId;
-          lastTouchClientX = clientX;
-          lastTouchAt = performance.now();
-        }
-        registerPowerTap(performance.now());
-        return;
-      }
-      if (phase === "up") {
-        if (pointerId === activeTouchPointer) activeTouchPointer = null;
-        return;
-      }
-      if (pointerType === "touch" && pointerId !== activeTouchPointer) return;
-      const rect = canvas.getBoundingClientRect();
-      if (pointerType === "touch") {
-        const deltaX = clientX - lastTouchClientX;
-        player.x += (deltaX / rect.width) * width;
-        lastTouchClientX = clientX;
-        return;
-      }
-      if (isGhostMouse(pointerType)) return;
-      player.x = ((clientX - rect.left) / rect.width) * width;
-    };
 
-    canvas.addEventListener("pointerdown", onPointerDown);
-    canvas.addEventListener("pointermove", movePlayer);
-    canvas.addEventListener("mousemove", movePlayerWithMouse);
-    canvas.addEventListener("pointerup", onPointerUp);
-    canvas.addEventListener("pointercancel", onPointerUp);
+    if (livePongPointer?.pointerType === "touch") {
+      beginTouch(livePongPointer.pointerId, livePongPointer.clientX);
+    } else if (livePongPointer && !isGhostMouse(livePongPointer.pointerType)) {
+      movePlayerAbsolute(livePongPointer.clientX);
+    }
+
+    const pointerOpts = { capture: true } as const;
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
-    window.addEventListener("pong-external-pointer", onExternalPointer);
+    document.addEventListener("pointerdown", onPointerDown, pointerOpts);
+    document.addEventListener("pointermove", onPointerMove, pointerOpts);
+    document.addEventListener("pointerup", onPointerUp, pointerOpts);
+    document.addEventListener("pointercancel", onPointerUp, pointerOpts);
 
     const serveBall = () => {
       const speed = 204 + score * 14;
@@ -881,6 +895,8 @@ function VerticalPong({
       if (!stopped) frame = requestAnimationFrame(loop);
     };
     const startMatch = () => {
+      if (matchStarted) return;
+      matchStarted = true;
       lastTime = performance.now();
       frame = requestAnimationFrame(loop);
     };
@@ -911,27 +927,24 @@ function VerticalPong({
       );
     };
 
-    if (skipCountdown) {
-      startMatch();
-    } else if (!introReady) {
+    const updatePlayerPosition = (dt: number) => {
+      if (keys.has("ArrowLeft")) player.x -= 260 * dt;
+      if (keys.has("ArrowRight")) player.x += 260 * dt;
+      player.x = Math.max(
+        player.width / 2,
+        Math.min(width - player.width / 2, player.x),
+      );
+    };
+    const startCountdown = () => {
+      if (matchStarted || countdownStarted) return;
+      countdownStarted = true;
       drawWaitingScene();
-    } else {
-      drawWaitingScene();
-
       const countdownStartedAt = performance.now();
       let countdownLastTime = countdownStartedAt;
       let reportedCountdown = 3;
       onCountdownChange?.(reportedCountdown);
       unlockArcadeAudio();
       playArcadeSound("countdown-3", false);
-      const updatePlayerPosition = (dt: number) => {
-        if (keys.has("ArrowLeft")) player.x -= 260 * dt;
-        if (keys.has("ArrowRight")) player.x += 260 * dt;
-        player.x = Math.max(
-          player.width / 2,
-          Math.min(width - player.width / 2, player.x),
-        );
-      };
       const countdownLoop = (now: number) => {
         const dt = Math.min((now - countdownLastTime) / 1000, 0.034);
         countdownLastTime = now;
@@ -957,19 +970,38 @@ function VerticalPong({
         frame = requestAnimationFrame(countdownLoop);
       };
       frame = requestAnimationFrame(countdownLoop);
+    };
+    const waitingLoop = (now: number) => {
+      if (stopped || matchStarted || countdownStarted) return;
+      const dt = Math.min((now - lastTime) / 1000, 0.034);
+      lastTime = now;
+      updatePlayerPosition(dt);
+      drawWaitingScene();
+      if (introReadyRef.current) {
+        startCountdown();
+        return;
+      }
+      frame = requestAnimationFrame(waitingLoop);
+    };
+
+    if (skipCountdown) {
+      startMatch();
+    } else {
+      drawWaitingScene();
+      lastTime = performance.now();
+      frame = requestAnimationFrame(waitingLoop);
     }
 
     return () => {
+      stopped = true;
       cancelAnimationFrame(frame);
       onCountdownChange?.(null);
-      canvas.removeEventListener("pointerdown", onPointerDown);
-      canvas.removeEventListener("pointermove", movePlayer);
-      canvas.removeEventListener("mousemove", movePlayerWithMouse);
-      canvas.removeEventListener("pointerup", onPointerUp);
-      canvas.removeEventListener("pointercancel", onPointerUp);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
-      window.removeEventListener("pong-external-pointer", onExternalPointer);
+      document.removeEventListener("pointerdown", onPointerDown, pointerOpts);
+      document.removeEventListener("pointermove", onPointerMove, pointerOpts);
+      document.removeEventListener("pointerup", onPointerUp, pointerOpts);
+      document.removeEventListener("pointercancel", onPointerUp, pointerOpts);
     };
   }, [
     onChargeChange,
@@ -982,7 +1014,6 @@ function VerticalPong({
     onScore,
     restartToken,
     skipCountdown,
-    introReady,
   ]);
 
   return (
@@ -1063,7 +1094,6 @@ export function PlayGame({ pong }: { pong: boolean }) {
     setCountdown(null);
     setSkipCountdown(false);
     setStatus("playing");
-    setRestartToken((current) => current + 1);
     const savedHighScore = Number.parseInt(localStorage.getItem(key) ?? "0", 10) || 0;
     highScoreRef.current = savedHighScore;
     setHighScore(savedHighScore);
