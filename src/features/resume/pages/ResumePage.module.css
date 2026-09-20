@@ -5,6 +5,7 @@
   max-width: var(--page-max);
   margin: 0 auto;
   padding: var(--page-top) var(--pad-x-inner) 80px;
+  container-type: inline-size;
 }
 
 .page::after {
@@ -176,8 +177,11 @@
   .page {
     padding: var(--page-top-mobile) var(--pad-x) 64px;
   }
+}
 
+@container (max-width: 599px) {
   .leadFirst {
+    display: inline;
     white-space: normal;
   }
 
@@ -187,6 +191,20 @@
 
   .sentenceBreak::before {
     content: " ";
+  }
+}
+
+@container (max-width: 345px) {
+  .ctaRow {
+    display: grid;
+    width: max-content;
+    max-width: 100%;
+  }
+
+  .ctaRow .cta {
+    width: 100%;
+    min-width: 0;
+    flex: none;
   }
 }
 
