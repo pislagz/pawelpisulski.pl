@@ -154,21 +154,12 @@
 
 .actionRow {
   display: flex;
-  flex-direction: row;
+  flex-direction: row-reverse;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 12px;
   height: 28px;
   margin-top: 18px;
-}
-
-.actionRow:has(.error) {
-  flex-direction: row-reverse;
-  justify-content: space-between;
-}
-
-.actionRow:has(.error) .error {
-  text-align: left;
 }
 
 .submit {
@@ -223,7 +214,7 @@
   font-size: var(--type-quantico-12);
   line-height: 1.2;
   color: var(--color-text-muted);
-  text-align: right;
+  text-align: left;
 }
 
 .successIn {
@@ -237,7 +228,7 @@
   font-size: var(--type-quantico-12);
   line-height: 1.2;
   color: #ff8f8f;
-  text-align: right;
+  text-align: left;
   animation: success-in 320ms ease both;
 }
 
@@ -355,15 +346,12 @@
   }
 
   :global(html[data-footer-enabled]) .actionRow {
+    flex-direction: row;
     margin-top: 14px;
   }
 
-  :global(html[data-footer-enabled]) .actionRow:has(.error) {
-    flex-direction: row;
-    justify-content: flex-start;
-  }
-
-  :global(html[data-footer-enabled]) .actionRow:has(.error) .error {
+  :global(html[data-footer-enabled]) .error,
+  :global(html[data-footer-enabled]) .success {
     text-align: right;
   }
 }
