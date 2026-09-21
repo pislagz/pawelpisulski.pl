@@ -14,4 +14,5 @@ export const NAV_ITEMS = [
   { href: "/resume", label: "résumé" },
 ] as const;
 
-export const RESUME_PDF_URL = "https://drive.google.com/uc?export=download&id=1ThWjwwUBTlmEd4SHrh2zAhzVJzZxR4JH";
+export const RESUME_PDF_URL =
+  "https://drive.google.com/uc?export=download&id=1y8Arr_g421jSAA7njU8c13_Sdxd1T1qL";
