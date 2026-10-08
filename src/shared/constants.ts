@@ -13,6 +13,3 @@ export const NAV_ITEMS = [
   { href: "/play", label: "play" },
   { href: "/resume", label: "résumé" },
 ] as const;
-
-export const RESUME_PDF_URL =
-  "https://drive.google.com/uc?export=download&id=1y8Arr_g421jSAA7njU8c13_Sdxd1T1qL";

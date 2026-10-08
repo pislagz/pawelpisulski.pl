@@ -3,7 +3,6 @@
 import type { CSSProperties } from "react";
 import { useLayoutEffect, useState } from "react";
 import { RouteEntranceSound } from "@shared/components/RouteEntranceSound";
-import { RESUME_PDF_URL } from "@shared/constants";
 import { Button } from "@shared/ui/Button";
 import styles from "./ResumePage.module.css";
 
@@ -129,7 +128,7 @@ function DecryptText({
   );
 }
 
-export function ResumePage() {
+export function ResumePage({ pdfUrl }: { pdfUrl: string }) {
   const leadFirst = "If you want to know more about me download my résumé.";
   const leadSecond = "Feel free to use that data in any recruitment process.";
 
@@ -148,7 +147,7 @@ export function ResumePage() {
       </p>
       <div className={styles.ctaRow}>
         <Button
-          href={RESUME_PDF_URL}
+          href={pdfUrl}
           variant="glass"
           iconSrc="/assets/icons/pdf.svg"
           iconSize={18}
